@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ESP32 Stepper + Stimulator Dashboard</title>
+  <link rel="preconnect" href="https://api.fontshare.com" />
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=cabinet-grotesk@500,700&display=swap" rel="stylesheet">
+  <style>
+    :root, [data-theme="light"] {
+      --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+      --text-sm: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
+      --text-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+      --text-lg: clamp(1.125rem, 1rem + 0.75vw, 1.5rem);
+      --text-xl: clamp(1.5rem, 1.2rem + 1.25vw, 2.25rem);
+      --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem; --space-5: 1.25rem;
+      --space-6: 1.5rem; --space-8: 2rem; --space-12: 3rem;
+      --color-bg: #f7f6f2; --color-surface: #f9f8f5; --color-surface-2: #fbfbf9;
+      --color-text: #28251d; --color-text-muted: #7a7974; --color-text-inverse: #f9f8f4;
+      --color-divider: #dcd9d5; --color-primary: #01696f; --color-primary-hover: #0c4e54;
+      --color-primary-highlight: #cedcd8; --color-success: #437a22; --color-warning: #964219; --color-error: #a13544;
+      --shadow-sm: 0 1px 2px rgba(40,37,29,0.06); --shadow-md: 0 10px 30px rgba(40,37,29,0.10);
+      --radius-md: 0.75rem; --radius-lg: 1rem; --radius-xl: 1.25rem; --radius-full: 999px;
+      --font-display: 'Cabinet Grotesk', 'Inter', sans-serif; --font-body: 'Satoshi', 'Inter', sans-serif;
+      --transition: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    [data-theme="dark"] {
+      --color-bg: #171614; --color-surface: #1c1b19; --color-surface-2: #201f1d;
+      --color-text: #cdccca; --color-text-muted: #9a9894; --color-text-inverse: #171614;
+      --color-divider: #262523; --color-primary: #4f98a3; --color-primary-hover: #227f8b;
+      --color-primary-highlight: #313b3b; --color-success: #6daa45; --color-warning: #e8af34; --color-error: #dd6974;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.24); --shadow-md: 0 14px 36px rgba(0,0,0,0.35);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100dvh; font-family: var(--font-body); font-size: var(--text-base); line-height: 1.6;
+      color: var(--color-text); background: radial-gradient(circle at top right, color-mix(in srgb, var(--color-primary) 10%, transparent), transparent 28%), linear-gradient(180deg, var(--color-bg), var(--color-surface));
+    }
+    button, input, select { font: inherit; }
+    button {
+      border: 0; border-radius: var(--radius-md); min-height: 44px; cursor: pointer;
+      transition: transform var(--transition), background var(--transition), color var(--transition), border-color var(--transition), opacity var(--transition);
+    }
+    button:disabled { cursor: not-allowed; opacity: 0.45; }
+    input, select {
+      width: 100%; min-height: 48px; border-radius: var(--radius-md);
+      border: 1px solid color-mix(in srgb, var(--color-text) 14%, transparent);
+      background: var(--color-surface-2); color: var(--color-text); padding: 0 var(--space-4);
+    }
+    .app { width: min(1180px, calc(100% - 2rem)); margin: 0 auto; padding: var(--space-6) 0 var(--space-12); }
+    .topbar, .card {
+      border: 1px solid color-mix(in srgb, var(--color-text) 10%, transparent);
+      border-radius: var(--radius-xl); background: color-mix(in srgb, var(--color-surface) 96%, transparent); box-shadow: var(--shadow-sm);
+    }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-8); padding: var(--space-4) var(--space-5); }
+    .brand { display: flex; align-items: center; gap: var(--space-3); }
+    .logo { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--color-primary-highlight), color-mix(in srgb, var(--color-primary) 15%, var(--color-surface))); color: var(--color-primary); }
+    .brand h1 { margin: 0; font-family: var(--font-display); font-size: var(--text-xl); line-height: 1.05; letter-spacing: -0.03em; }
+    .brand p { margin: 0; color: var(--color-text-muted); font-size: var(--text-sm); }
+    .theme-toggle { width: 48px; height: 48px; background: var(--color-surface-2); color: var(--color-text); border: 1px solid color-mix(in srgb, var(--color-text) 10%, transparent); }
+    .grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: var(--space-5); }
+    .card { padding: var(--space-5); }
+    .card h2 { margin: 0 0 var(--space-2); font-size: var(--text-lg); font-family: var(--font-display); }
+    .hero-note, .section-copy { margin: 0 0 var(--space-5); color: var(--color-text-muted); font-size: var(--text-sm); }
+    .status-row, .actions, .move-row { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+    .pill { display: inline-flex; align-items: center; gap: .55rem; min-height: 40px; padding: .55rem .85rem; border-radius: var(--radius-full); background: var(--color-surface-2); border: 1px solid color-mix(in srgb, var(--color-text) 10%, transparent); font-size: var(--text-sm); }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--color-error); box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-error) 12%, transparent); }
+    .dot.connected { background: var(--color-success); box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-success) 14%, transparent); }
+    .btn-primary { background: var(--color-primary); color: var(--color-text-inverse); padding: 0 var(--space-5); }
+    .btn-primary:hover:not(:disabled) { background: var(--color-primary-hover); }
+    .btn-secondary { background: var(--color-surface-2); color: var(--color-text); border: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent); padding: 0 var(--space-5); }
+    .btn-danger { background: color-mix(in srgb, var(--color-error) 12%, var(--color-surface-2)); color: var(--color-error); border: 1px solid color-mix(in srgb, var(--color-error) 22%, transparent); padding: 0 var(--space-5); }
+    .btn-warn { background: color-mix(in srgb, var(--color-warning) 14%, var(--color-surface-2)); color: var(--color-warning); border: 1px solid color-mix(in srgb, var(--color-warning) 24%, transparent); padding: 0 var(--space-5); }
+    .form-grid, .triple-grid, .quick-grid { display: grid; gap: var(--space-4); }
+    .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: var(--space-4); }
+    .triple-grid, .quick-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .quick-grid { margin: var(--space-4) 0 var(--space-5); gap: var(--space-3); }
+    .field label { display: block; margin-bottom: var(--space-2); font-size: var(--text-sm); color: var(--color-text-muted); }
+    .quick-btn { background: var(--color-surface-2); color: var(--color-text); border: 1px solid color-mix(in srgb, var(--color-text) 10%, transparent); padding: var(--space-4); text-align: left; }
+    .quick-btn strong { display: block; }
+    .quick-btn span { color: var(--color-text-muted); font-size: var(--text-xs); }
+    .metric, .command-log { padding: var(--space-4); border-radius: var(--radius-lg); background: var(--color-surface-2); border: 1px solid color-mix(in srgb, var(--color-text) 9%, transparent); }
+    .metric .label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .08em; color: var(--color-text-muted); margin-bottom: var(--space-2); }
+    .metric .value { font-size: clamp(1.8rem, 1.2rem + 2vw, 2.5rem); font-family: var(--font-display); letter-spacing: -0.04em; line-height: 1; margin-bottom: var(--space-2); }
+    .metric .meta, .subtle, .footer-note { color: var(--color-text-muted); font-size: var(--text-sm); }
+    .telemetry { display: grid; gap: var(--space-3); margin-top: var(--space-3); }
+    .telemetry-row { display: flex; justify-content: space-between; gap: var(--space-4); padding-bottom: var(--space-3); border-bottom: 1px solid var(--color-divider); font-size: var(--text-sm); }
+    .telemetry-row:last-child { border-bottom: 0; padding-bottom: 0; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    @media (max-width: 960px) { .grid, .form-grid, .triple-grid, .quick-grid { grid-template-columns: 1fr; } .topbar { align-items: flex-start; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.5"></circle><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"></path></svg>
+        </div>
+        <div><p>Web Bluetooth control panel</p><h1>ESP32 Stepper + Stimulator</h1></div>
+      </div>
+      <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch theme"><svg id="themeIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></button>
+    </header>
+
+    <main class="grid">
+      <section class="card">
+        <h2>Connection</h2>
+        <p class="hero-note">Connect to your ESP32 BLE peripheral, subscribe to telemetry, and send text commands for both the stepper motor and the stimulator output.</p>
+        <div class="status-row">
+          <div class="pill"><span class="dot" id="stateDot"></span><span id="bleState">Disconnected</span></div>
+          <div class="pill">Device <strong id="deviceLabel">Not selected</strong></div>
+        </div>
+        <div class="actions">
+          <button id="connectBleButton" class="btn-primary" type="button">Connect device</button>
+          <button id="disconnectBleButton" class="btn-secondary" type="button" disabled>Disconnect</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Live telemetry</h2>
+        <p class="section-copy">The ESP32 can push position, target, movement state, and stimulator status back through the notify characteristic.</p>
+        <div class="metric">
+          <div class="label">Latest feedback</div>
+          <div class="value" id="valueContainer">—</div>
+          <div class="meta">Last reading at <span id="timestamp">—</span></div>
+        </div>
+        <div class="telemetry">
+          <div class="telemetry-row"><span>Last command</span><strong id="valueSent">—</strong></div>
+          <div class="telemetry-row"><span>Stimulator state</span><strong id="stimState">OFF</strong></div>
+          <div class="telemetry-row"><span>BLE service</span><strong>19b10000-e8f2-537e-4f6c-d104768a1214</strong></div>
+          <div class="telemetry-row"><span>Control characteristic</span><strong>19b10002-e8f2-537e-4f6c-d104768a1214</strong></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Move motor</h2>
+        <p class="section-copy">Choose direction and step count, then send a compact BLE command your firmware can parse.</p>
+        <div class="form-grid">
+          <div class="field"><label for="directionSelect">Direction</label><select id="directionSelect"><option value="CW">Clockwise</option><option value="CCW">Counterclockwise</option></select></div>
+          <div class="field"><label for="stepsInput">Steps</label><input id="stepsInput" type="number" min="1" step="1" value="200" inputmode="numeric" /></div>
+        </div>
+        <div class="quick-grid">
+          <button class="quick-btn" type="button" data-steps="50"><strong>Jog</strong><span>50 steps</span></button>
+          <button class="quick-btn" type="button" data-steps="200"><strong>1 revolution*</strong><span>200 steps</span></button>
+          <button class="quick-btn" type="button" data-steps="800"><strong>Long move</strong><span>800 steps</span></button>
+        </div>
+        <div class="move-row"><button id="moveButton" class="btn-primary" type="button" disabled>Send move</button><button id="stopButton" class="btn-danger" type="button" disabled>Emergency stop</button></div>
+        <div class="command-log"><div class="subtle">Command preview</div><code id="commandPreview">CW:200</code></div>
+        <p class="footer-note">* Step count per revolution depends on your motor, driver, and microstepping setup.</p>
+      </section>
+
+      <section class="card">
+        <h2>Stimulator</h2>
+        <p class="section-copy">Enable a 5-second pulse toggle on a dedicated GPIO called <code>STIMULATOR_PIN</code>. This section sends simple on/off BLE commands.</p>
+        <div class="triple-grid">
+          <div class="field"><label>Pulse interval</label><input type="text" value="5000 ms fixed" disabled /></div>
+          <div class="field"><label>On command</label><input type="text" value="STIM:ON" disabled /></div>
+          <div class="field"><label>Off command</label><input type="text" value="STIM:OFF" disabled /></div>
+        </div>
+        <div class="move-row"><button id="stimOnButton" class="btn-warn" type="button" disabled>Start pulsing</button><button id="stimOffButton" class="btn-secondary" type="button" disabled>Stop pulsing</button></div>
+        <div class="command-log"><div class="subtle">Stimulator preview</div><code id="stimPreview">STIM:OFF</code></div>
+      </section>
+
+      <section class="card">
+        <h2>Protocol notes</h2>
+        <p class="section-copy">This dashboard expects the ESP32 firmware to keep the original Web BLE service and characteristic structure, while interpreting writes as motion or stimulator commands.</p>
+        <div class="telemetry">
+          <div class="telemetry-row"><span>Move format</span><strong><code>CW:200</code> or <code>CCW:200</code></strong></div>
+          <div class="telemetry-row"><span>Stop format</span><strong><code>STOP</code></strong></div>
+          <div class="telemetry-row"><span>Stimulator format</span><strong><code>STIM:ON</code> / <code>STIM:OFF</code></strong></div>
+          <div class="telemetry-row"><span>Browser support</span><strong>Requires a browser with Web Bluetooth support</strong></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const connectButton = document.getElementById('connectBleButton');
+    const disconnectButton = document.getElementById('disconnectBleButton');
+    const moveButton = document.getElementById('moveButton');
+    const stopButton = document.getElementById('stopButton');
+    const stimOnButton = document.getElementById('stimOnButton');
+    const stimOffButton = document.getElementById('stimOffButton');
+    const directionSelect = document.getElementById('directionSelect');
+    const stepsInput = document.getElementById('stepsInput');
+    const quickButtons = [...document.querySelectorAll('[data-steps]')];
+    const retrievedValue = document.getElementById('valueContainer');
+    const latestValueSent = document.getElementById('valueSent');
+    const bleStateContainer = document.getElementById('bleState');
+    const timestampContainer = document.getElementById('timestamp');
+    const commandPreview = document.getElementById('commandPreview');
+    const stimPreview = document.getElementById('stimPreview');
+    const stimState = document.getElementById('stimState');
+    const stateDot = document.getElementById('stateDot');
+    const deviceLabel = document.getElementById('deviceLabel');
+    const themeToggle = document.getElementById('themeToggle');
+    const themeIcon = document.getElementById('themeIcon');
+
+    const deviceName = 'ESP32';
+    const bleService = '19b10000-e8f2-537e-4f6c-d104768a1214';
+    const controlCharacteristicUuid = '19b10002-e8f2-537e-4f6c-d104768a1214';
+    const sensorCharacteristicUuid = '19b10001-e8f2-537e-4f6c-d104768a1214';
+
+    let bleDevice = null, bleServer = null, bleServiceFound = null, sensorCharacteristicFound = null, controlCharacteristicFound = null;
+    let theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+
+    function setTheme(next) {
+      theme = next;
+      document.documentElement.setAttribute('data-theme', theme);
+      themeIcon.innerHTML = theme === 'dark'
+        ? '<path d="M12 3a1 1 0 0 1 1 1v1a1 1 0 1 1-2 0V4a1 1 0 0 1 1-1Zm0 15a1 1 0 0 1 1 1v1a1 1 0 1 1-2 0v-1a1 1 0 0 1 1-1Zm9-7a1 1 0 1 1 0 2h-1a1 1 0 1 1 0-2h1ZM5 12a1 1 0 0 1-1 1H3a1 1 0 1 1 0-2h1a1 1 0 0 1 1 1Zm11.95-5.536a1 1 0 0 1 1.414 0l.707.707a1 1 0 0 1-1.414 1.414l-.707-.707a1 1 0 0 1 0-1.414ZM6.343 17.657a1 1 0 0 1 1.414 0l.707.707a1 1 0 1 1-1.414 1.414l-.707-.707a1 1 0 0 1 0-1.414ZM18.364 17.657a1 1 0 0 1 0 1.414l-.707.707a1 1 0 0 1-1.414-1.414l.707-.707a1 1 0 0 1 1.414 0ZM7.757 6.464a1 1 0 0 1 0 1.414L7.05 8.586A1 1 0 1 1 5.636 7.17l.707-.707a1 1 0 0 1 1.414 0ZM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"/>'
+        : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+    }
+    setTheme(theme);
+    themeToggle.addEventListener('click', () => setTheme(theme === 'dark' ? 'light' : 'dark'));
+
+    function updateCommandPreview() {
+      const steps = Math.max(1, parseInt(stepsInput.value || '1', 10));
+      commandPreview.textContent = `${directionSelect.value}:${steps}`;
+    }
+
+    function setConnectedState(connected, name = 'Not selected') {
+      connectButton.disabled = connected;
+      disconnectButton.disabled = !connected;
+      moveButton.disabled = !connected;
+      stopButton.disabled = !connected;
+      stimOnButton.disabled = !connected;
+      stimOffButton.disabled = !connected;
+      bleStateContainer.textContent = connected ? 'Connected' : 'Disconnected';
+      deviceLabel.textContent = connected ? name : 'Not selected';
+      stateDot.classList.toggle('connected', connected);
+      if (!connected) { stimState.textContent = 'OFF'; stimPreview.textContent = 'STIM:OFF'; }
+    }
+
+    function isWebBluetoothEnabled() {
+      if (!navigator.bluetooth) {
+        bleStateContainer.textContent = 'Web Bluetooth unavailable';
+        deviceLabel.textContent = 'Use Chrome or Edge over HTTPS';
+        return false;
+      }
+      return true;
+    }
+
+    async function connectToDevice() {
+      try {
+        bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ name: deviceName }], optionalServices: [bleService] });
+        bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+        bleServer = await bleDevice.gatt.connect();
+        bleServiceFound = await bleServer.getPrimaryService(bleService);
+        sensorCharacteristicFound = await bleServiceFound.getCharacteristic(sensorCharacteristicUuid);
+        controlCharacteristicFound = await bleServiceFound.getCharacteristic(controlCharacteristicUuid);
+        sensorCharacteristicFound.addEventListener('characteristicvaluechanged', handleCharacteristicChange);
+        await sensorCharacteristicFound.startNotifications();
+        const value = await sensorCharacteristicFound.readValue();
+        retrievedValue.textContent = new TextDecoder().decode(value) || '—';
+        timestampContainer.textContent = getDateTime();
+        setConnectedState(true, bleDevice.name || 'ESP32');
+      } catch (error) { console.error('Connection error:', error); }
+    }
+
+    function onDisconnected() {
+      bleServer = null; bleServiceFound = null; sensorCharacteristicFound = null; controlCharacteristicFound = null; setConnectedState(false);
+    }
+
+    function handleCharacteristicChange(event) {
+      const text = new TextDecoder().decode(event.target.value) || '—';
+      retrievedValue.textContent = text;
+      timestampContainer.textContent = getDateTime();
+      if (text.includes('STIM:PULSE_HIGH')) stimState.textContent = 'PULSE HIGH';
+      else if (text.includes('STIM:PULSE_LOW')) stimState.textContent = 'PULSE LOW';
+      else if (text.includes('STIM:OFF')) stimState.textContent = 'OFF';
+    }
+
+    async function sendCommand(command) {
+      if (!bleServer || !bleServer.connected || !controlCharacteristicFound) {
+        window.alert('Bluetooth is not connected. Connect to your ESP32 first.');
+        return;
+      }
+      const data = new TextEncoder().encode(command);
+      await controlCharacteristicFound.writeValue(data);
+      latestValueSent.textContent = command;
+    }
+
+    async function sendStepperCommand() {
+      const steps = parseInt(stepsInput.value, 10);
+      if (!steps || steps < 1) return window.alert('Enter a valid number of steps greater than zero.');
+      await sendCommand(`${directionSelect.value}:${steps}`);
+    }
+
+    const stopMotor = () => sendCommand('STOP');
+    const stimOn = async () => { stimPreview.textContent = 'STIM:ON'; await sendCommand('STIM:ON'); stimState.textContent = 'PULSE HIGH'; };
+    const stimOff = async () => { stimPreview.textContent = 'STIM:OFF'; await sendCommand('STIM:OFF'); stimState.textContent = 'OFF'; };
+
+    async function disconnectDevice() {
+      if (!bleDevice || !bleDevice.gatt || !bleDevice.gatt.connected) return window.alert('Bluetooth is not connected.');
+      if (sensorCharacteristicFound) {
+        try { await sensorCharacteristicFound.stopNotifications(); sensorCharacteristicFound.removeEventListener('characteristicvaluechanged', handleCharacteristicChange); } catch (err) { console.warn('Stopping notifications failed:', err); }
+      }
+      bleDevice.gatt.disconnect();
+      setConnectedState(false);
+    }
+
+    function getDateTime() {
+      const now = new Date();
+      return `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth()+1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+    }
+
+    connectButton.addEventListener('click', async () => { if (isWebBluetoothEnabled()) await connectToDevice(); });
+    disconnectButton.addEventListener('click', disconnectDevice);
+    moveButton.addEventListener('click', sendStepperCommand);
+    stopButton.addEventListener('click', stopMotor);
+    stimOnButton.addEventListener('click', stimOn);
+    stimOffButton.addEventListener('click', stimOff);
+    directionSelect.addEventListener('change', updateCommandPreview);
+    stepsInput.addEventListener('input', updateCommandPreview);
+    quickButtons.forEach(button => button.addEventListener('click', () => { stepsInput.value = button.dataset.steps; updateCommandPreview(); }));
+    updateCommandPreview();
+    setConnectedState(false);
+  </script>
+</body>
+</html>
